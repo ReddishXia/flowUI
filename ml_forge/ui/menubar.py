@@ -12,7 +12,7 @@ def build_menubar() -> None:
     from ml_forge.graph.nodes       import delete_selected_nodes, clear_canvas
     from ml_forge.graph.tabs        import new_tab, close_tab, open_assign_role_dialog
     from ml_forge.graph.undo        import undo, redo
-    from ml_forge.ui.training       import on_run, on_pause, on_stop
+    from ml_forge.ui.training       import on_run, on_run_inference, on_pause, on_stop
     from ml_forge.engine.generator  import export_pytorch
     from ml_forge.filesystem.save   import save_current, open_save_dialog, open_load_dialog
 
@@ -63,7 +63,7 @@ def build_menubar() -> None:
         # Run
         with dpg.menu(label="Run"):
             dpg.add_menu_item(label="Train", callback=on_run)
-            dpg.add_menu_item(label="Inference", callback=_open_inference)
+            dpg.add_menu_item(label="Inference", callback=on_run_inference)
 
         # Help
         with dpg.menu(label="Help"):
@@ -78,7 +78,7 @@ def build_menubar() -> None:
         with dpg.popup(parent="btn_run", mousebutton=dpg.mvMouseButton_Left,
                        modal=False, tag="btn_run_popup"):
             dpg.add_menu_item(label="Train", callback=lambda: _run_popup_action(on_run))
-            dpg.add_menu_item(label="Inference", callback=lambda: _run_popup_action(_open_inference))
+            dpg.add_menu_item(label="Inference", callback=lambda: _run_popup_action(on_run_inference))
         dpg.add_button(label="PAUSE",   tag="btn_pause", small=True,
                        callback=on_pause, enabled=False)
         dpg.add_button(label="STOP",    tag="btn_stop",  small=True,
@@ -94,11 +94,6 @@ def build_menubar() -> None:
         dpg.add_separator()
         dpg.add_text("CUDA:", color=(150, 150, 150))
         dpg.add_text("...", tag="mb_cuda", color=(120, 120, 120))
-
-
-def _open_inference() -> None:
-    __import__("ml_forge.engine.inference", fromlist=["open_inference_window"]).open_inference_window()
-
 
 def _run_popup_action(action) -> None:
     action()
@@ -158,6 +153,10 @@ def _open_docs() -> None:
             dpg.add_text("   Connect DataLoaderBlock -> ModelBlock -> Loss -> Optimizer")
             dpg.add_text("   Configure epochs, device, checkpointing in the right panel")
             dpg.add_text("   Press RUN and choose Train to start training")
+            dpg.add_spacer(height=4)
+            dpg.add_text("4. Inference tab - build a dedicated inference graph")
+            dpg.add_text("   Add Inf Dataset -> Inf Preprocess -> checkpoint -> InferenceOutput")
+            dpg.add_text("   Press RUN and choose Inference to execute the graph")
 
         dpg.add_spacer(height=4)
         with dpg.collapsing_header(label="Keyboard Shortcuts", default_open=True):
@@ -193,7 +192,8 @@ def _open_docs() -> None:
             dpg.add_text("Checkpoints are saved to the Save Dir in Training Config.")
             dpg.add_text("best.pth  - best validation checkpoint")
             dpg.add_text("final.pth - checkpoint at end of training")
-            dpg.add_text("Use Run > Inference to test a saved checkpoint.")
+            dpg.add_text("Use the Inference tab to build Inf Dataset -> checkpoint -> InferenceOutput.")
+            dpg.add_text("Then use Run > Inference to execute it.")
 
         dpg.add_spacer(height=8)
         dpg.add_button(label="Close", width=-1,

@@ -28,6 +28,15 @@ def attr_param_tag(tid: int, nid: int, param: str) -> str:
 def input_field_tag(tid: int, nid: int, param: str) -> str:
     return f"node_{tid}_{nid}_input_{param}"
 
+def inference_output_status_tag(ntag: str) -> str:
+    return f"{ntag}_inf_status"
+
+def inference_output_summary_tag(ntag: str) -> str:
+    return f"{ntag}_inf_summary"
+
+def inference_output_results_tag(ntag: str) -> str:
+    return f"{ntag}_inf_results"
+
 
 # raw ops
 
@@ -102,6 +111,25 @@ def raw_spawn_node(tid: int, block_label: str, nid: int | None = None,
                 dpg.add_input_text(label=param, default_value=value,
                                    width=110, hint=param,
                                    tag=input_field_tag(tid, nid, param))
+
+        if block_label == "InferenceOutput":
+            with dpg.node_attribute(attribute_type=dpg.mvNode_Attr_Static):
+                dpg.add_text("Result Output", color=(120, 200, 255))
+                dpg.add_text("Status", color=(120, 120, 120))
+                dpg.add_text("Idle", tag=inference_output_status_tag(ntag), color=(140, 140, 140))
+                dpg.add_spacer(height=2)
+                dpg.add_text("Summary", color=(120, 120, 120))
+                dpg.add_text(
+                    "No inference run yet.",
+                    tag=inference_output_summary_tag(ntag),
+                    color=(180, 180, 180),
+                    wrap=220,
+                )
+                dpg.add_spacer(height=4)
+                dpg.add_text("Top-k Predictions", color=(120, 120, 120))
+                with dpg.child_window(tag=inference_output_results_tag(ntag),
+                                      width=240, height=110, border=True):
+                    dpg.add_text("Top-k results will appear here.", color=(120, 120, 120))
 
         for pin in block["outputs"]:
             with dpg.node_attribute(label=pin,

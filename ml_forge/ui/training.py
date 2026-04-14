@@ -229,6 +229,21 @@ def on_run() -> None:
     update_status_indicator()
 
 
+def on_run_inference() -> None:
+    ts = state.train_state
+    if ts["status"] != "idle":
+        log("Stop or pause training before running inference.", "warning")
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        log("PyTorch is not installed. Run:  pip install torch torchvision", "error")
+        return
+
+    from ml_forge.engine.inference import run_inference_pipeline
+    run_inference_pipeline()
+
+
 def on_pause() -> None:
     from ml_forge.engine.run import pause_training
     ts = state.train_state

@@ -42,6 +42,22 @@ _OPTIMIZER_BLOCKS: frozenset[str] = _labels_from_sections(
     ("Training", "Optimizers"),
 )
 
+_INFERENCE_CHECKPOINT_BLOCKS: frozenset[str] = _labels_from_sections(
+    ("Inference", "load checkpoint"),
+)
+
+_INFERENCE_OUTPUT_BLOCKS: frozenset[str] = _labels_from_sections(
+    ("Inference", "Outputs"),
+)
+
+_INFERENCE_DATASET_BLOCKS: frozenset[str] = _labels_from_sections(
+    ("Inference", "Datasets"),
+)
+
+_INFERENCE_AUG_BLOCKS: frozenset[str] = _labels_from_sections(
+    ("Inference", "Preprocess"),
+)
+
 
 #  Data structures
 
@@ -433,6 +449,98 @@ def _validate_training(tab: dict, result: ValidationResult) -> None:
     _validate_params(graph, result)
 
 
+def _validate_inference(tab: dict, result: ValidationResult) -> None:
+    graph = build_graph(tab)
+    if not graph:
+        result.add_error("Inference tab has no nodes.")
+        return
+
+    nodes = list(graph.values())
+
+    dataset_nodes = [n for n in nodes if n.block_label in _INFERENCE_DATASET_BLOCKS]
+    aug_nodes = [n for n in nodes if n.block_label in _INFERENCE_AUG_BLOCKS]
+    checkpoint_nodes = [n for n in nodes if n.block_label in _INFERENCE_CHECKPOINT_BLOCKS]
+    output_nodes = [n for n in nodes if n.block_label in _INFERENCE_OUTPUT_BLOCKS]
+
+    if not dataset_nodes:
+        result.add_error("Inference tab needs a Dataset node.")
+    if not checkpoint_nodes:
+        result.add_error("Inference tab needs one checkpoint node (pth, pt, or ckpt).")
+    elif len(checkpoint_nodes) > 1:
+        result.add_warning(f"{len(checkpoint_nodes)} checkpoint nodes found - only the first connected one will be used.")
+
+    if not output_nodes:
+        result.add_error("Inference tab needs an InferenceOutput node.")
+    elif len(output_nodes) > 1:
+        result.add_warning(f"{len(output_nodes)} output nodes found - only the first connected one will be used.")
+
+    for node in dataset_nodes:
+        if "images" not in node.connected_outputs:
+            result.add_warning(f"{node.block_label}: output is not connected.", node.ntag)
+
+    for node in aug_nodes:
+        if not node.connected_inputs and not node.connected_outputs:
+            result.add_warning(f"{node.block_label}: node is not connected to anything.", node.ntag)
+
+    if checkpoint_nodes:
+        checkpoint = checkpoint_nodes[0]
+        if "images" not in checkpoint.connected_inputs:
+            result.add_error(
+                f"{checkpoint.block_label}: images input must be connected from an Inference Dataset/Preprocess chain.",
+                checkpoint.ntag,
+            )
+        if "predictions" not in checkpoint.connected_outputs:
+            result.add_error(
+                f"{checkpoint.block_label}: predictions output must be connected to InferenceOutput.",
+                checkpoint.ntag,
+            )
+
+    if output_nodes:
+        out = output_nodes[0]
+        if "predictions" not in out.connected_inputs:
+            result.add_error(
+                "InferenceOutput: predictions input must be connected from a checkpoint node.",
+                out.ntag,
+            )
+
+    if checkpoint_nodes:
+        checkpoint = checkpoint_nodes[0]
+        upstream_has_dataset = False
+        targets = {checkpoint.ntag}
+        changed = True
+        while changed:
+            changed = False
+            for _, (a1, a2) in tab["links"].items():
+                if isinstance(a1, int):
+                    a1 = dpg.get_item_alias(a1) or ""
+                if isinstance(a2, int):
+                    a2 = dpg.get_item_alias(a2) or ""
+                sp = a1.split("_")
+                dp = a2.split("_")
+                if len(sp) >= 3 and len(dp) >= 3:
+                    src = f"node_{sp[1]}_{sp[2]}"
+                    dst = f"node_{dp[1]}_{dp[2]}"
+                    if dst in targets:
+                        src_node = graph.get(src)
+                        if src_node and src_node.block_label in _INFERENCE_DATASET_BLOCKS:
+                            upstream_has_dataset = True
+                        if src not in targets:
+                            targets.add(src)
+                            changed = True
+        if not upstream_has_dataset:
+            result.add_error(
+                f"{checkpoint.block_label}: upstream chain must include an Inference Dataset node.",
+                checkpoint.ntag,
+            )
+
+    try:
+        topological_sort(tab)
+    except CycleError:
+        result.add_error("Inference graph contains a cycle.")
+
+    _validate_params(graph, result)
+
+
 # Public: Validate Pipeline
 
 def validate_pipeline() -> ValidationResult:
@@ -453,4 +561,18 @@ def validate_pipeline() -> ValidationResult:
         else:
             validator(tab, result)
 
+    return result
+
+
+def validate_inference_pipeline() -> ValidationResult:
+    """
+    Validate the dedicated inference tab only.
+    This is intentionally separate from the training pipeline validation.
+    """
+    result = ValidationResult()
+    tab = get_tab_by_role("inference")
+    if tab is None:
+        result.add_error("No tab assigned to the 'inference' role.")
+    else:
+        _validate_inference(tab, result)
     return result
