@@ -116,6 +116,7 @@ def main() -> None:
         ("Data Prep", "data_prep"),
         ("Model",     "model"),
         ("Training",  "training"),
+        ("Inference", "inference"),
     ]:
         new_tab(tab_name, role=tab_role)
 
@@ -147,8 +148,9 @@ def main() -> None:
     _close_splash()
 
     log("ML Forge ready.", "header")
-    log("Build your pipeline across the three tabs: Data Prep -> Model -> Training.", "info")
-    log("Press RUN when all three pipeline stages are complete.", "info")
+    log("Build your training pipeline across Data Prep -> Model -> Training.", "info")
+    log("Use the Inference tab for checkpoint-based inference helpers.", "info")
+    log("Press RUN and choose Train or Inference.", "info")
 
     prev_time       = time.time()
     _autofill_counter = 0

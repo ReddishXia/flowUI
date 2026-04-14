@@ -31,7 +31,7 @@ def current_tab() -> dict | None:
 def new_tab(name: str | None = None, role: str | None = None) -> int:
     """
     Create a new tab, add it to the tab bar, and make it active.
-    role: "data_prep" | "model" | "training" | None
+    role: "data_prep" | "model" | "training" | "inference" | None
     Returns the new tab id.
     """
     from ml_forge.graph.links import link_callback, delink_callback
@@ -125,6 +125,17 @@ _HINT_LINES = {
         "       Loss.loss               -> Optimizer.params",
         "",
         "Then press RUN in the toolbar to train.",
+    ],
+    "inference": [
+        "Welcome to the Inference tab.",
+        "",
+        "Build your inference helpers here:",
+        "  1. Add a checkpoint node",
+        "     (pth, pt, or ckpt)",
+        "  2. Fill its path parameter",
+        "  3. Open RUN -> Inference to test the model",
+        "",
+        "Inference will prefer checkpoint nodes from this tab.",
     ],
     None: [
         "Drag nodes from the palette on the left.",
@@ -231,7 +242,7 @@ def assign_role(tid: int, role: str | None) -> None:
 
 def open_assign_role_dialog() -> None:
     """Show a popup to assign a pipeline role to the active tab."""
-    from ml_forge.graph.pipeline import ROLES, ROLE_ORDER
+    from ml_forge.graph.pipeline import ROLES, ASSIGNABLE_ROLE_ORDER
 
     tid = state.active_tab_id
     if tid is None or tid not in state.tabs:
@@ -244,13 +255,13 @@ def open_assign_role_dialog() -> None:
     current_role = state.tabs[tid].get("role")
 
     with dpg.window(label="Assign Tab Role", tag=tag, modal=True,
-                    no_resize=True, width=260, height=200,
+                    no_resize=True, width=260, height=235,
                     pos=(500, 300)):
         dpg.add_text(f'Assigning role for: {state.tabs[tid]["name"]}',
                      color=(180, 180, 180))
         dpg.add_spacer(height=6)
 
-        for role in ROLE_ORDER:
+        for role in ASSIGNABLE_ROLE_ORDER:
             info  = ROLES[role]
             label = info["label"]
             col   = info["color"]

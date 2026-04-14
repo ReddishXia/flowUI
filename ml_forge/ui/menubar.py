@@ -62,8 +62,8 @@ def build_menubar() -> None:
 
         # Run
         with dpg.menu(label="Run"):
-            dpg.add_menu_item(label="Inference...",
-                              callback=lambda: __import__("ml_forge.engine.inference", fromlist=["open_inference_window"]).open_inference_window())
+            dpg.add_menu_item(label="Train", callback=on_run)
+            dpg.add_menu_item(label="Inference", callback=_open_inference)
 
         # Help
         with dpg.menu(label="Help"):
@@ -74,7 +74,11 @@ def build_menubar() -> None:
         dpg.add_spacer(width=6)
 
         # Run controls
-        dpg.add_button(label="RUN",     tag="btn_run",   small=True, callback=on_run)
+        dpg.add_button(label="RUN v",   tag="btn_run",   small=True)
+        with dpg.popup(parent="btn_run", mousebutton=dpg.mvMouseButton_Left,
+                       modal=False, tag="btn_run_popup"):
+            dpg.add_menu_item(label="Train", callback=lambda: _run_popup_action(on_run))
+            dpg.add_menu_item(label="Inference", callback=lambda: _run_popup_action(_open_inference))
         dpg.add_button(label="PAUSE",   tag="btn_pause", small=True,
                        callback=on_pause, enabled=False)
         dpg.add_button(label="STOP",    tag="btn_stop",  small=True,
@@ -90,6 +94,16 @@ def build_menubar() -> None:
         dpg.add_separator()
         dpg.add_text("CUDA:", color=(150, 150, 150))
         dpg.add_text("...", tag="mb_cuda", color=(120, 120, 120))
+
+
+def _open_inference() -> None:
+    __import__("ml_forge.engine.inference", fromlist=["open_inference_window"]).open_inference_window()
+
+
+def _run_popup_action(action) -> None:
+    action()
+    if dpg.does_item_exist("btn_run_popup"):
+        dpg.configure_item("btn_run_popup", show=False)
 
 
 def _load_template(filename: str) -> None:
@@ -143,7 +157,7 @@ def _open_docs() -> None:
             dpg.add_text("3. Training tab - configure training")
             dpg.add_text("   Connect DataLoaderBlock -> ModelBlock -> Loss -> Optimizer")
             dpg.add_text("   Configure epochs, device, checkpointing in the right panel")
-            dpg.add_text("   Press RUN in the menubar to start training")
+            dpg.add_text("   Press RUN and choose Train to start training")
 
         dpg.add_spacer(height=4)
         with dpg.collapsing_header(label="Keyboard Shortcuts", default_open=True):
@@ -165,7 +179,7 @@ def _open_docs() -> None:
             dpg.add_text("  DataLoaderBlock.labels  -> Loss.target")
             dpg.add_text("  Loss.loss               -> Optimizer.params")
             dpg.add_spacer(height=4)
-            dpg.add_text("RUN will fail validation if any of these are missing.")
+            dpg.add_text("RUN -> Train will fail validation if any of these are missing.")
 
         dpg.add_spacer(height=4)
         with dpg.collapsing_header(label="Datasets", default_open=False):
@@ -179,7 +193,7 @@ def _open_docs() -> None:
             dpg.add_text("Checkpoints are saved to the Save Dir in Training Config.")
             dpg.add_text("best.pth  - best validation checkpoint")
             dpg.add_text("final.pth - checkpoint at end of training")
-            dpg.add_text("Use File > Run > Inference to test a saved checkpoint.")
+            dpg.add_text("Use Run > Inference to test a saved checkpoint.")
 
         dpg.add_spacer(height=8)
         dpg.add_button(label="Close", width=-1,

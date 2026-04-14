@@ -47,16 +47,25 @@ _CHECKPOINT_NODE_LABELS = ("pth", "pt", "ckpt")
 
 
 def _iter_checkpoint_nodes() -> list[dict]:
-    """Return checkpoint node metadata, preferring the active tab first."""
+    """Return checkpoint node metadata, preferring dedicated inference tabs first."""
     from ml_forge.graph.nodes import input_field_tag
 
-    ordered_tabs = []
-    if state.active_tab_id in state.tabs:
+    ordered_tabs: list[tuple[int, dict]] = []
+    seen: set[int] = set()
+
+    for tid, tab in state.tabs.items():
+        if tab.get("role") == "inference":
+            ordered_tabs.append((tid, tab))
+            seen.add(tid)
+
+    if state.active_tab_id in state.tabs and state.active_tab_id not in seen:
         ordered_tabs.append((state.active_tab_id, state.tabs[state.active_tab_id]))
-    ordered_tabs.extend(
-        (tid, tab) for tid, tab in state.tabs.items()
-        if tid != state.active_tab_id
-    )
+        seen.add(state.active_tab_id)
+
+    for tid, tab in state.tabs.items():
+        if tid not in seen:
+            ordered_tabs.append((tid, tab))
+            seen.add(tid)
 
     nodes: list[dict] = []
     for tid, tab in ordered_tabs:

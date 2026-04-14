@@ -47,17 +47,17 @@ LOG_PREFIXES = {
 
 TRAIN_BTN_STYLES = {
     "idle":    [
-        ("RUN",   True,  (60,  140,  60)),
+        ("RUN v", True,  (60,  140,  60)),
         ("PAUSE", False, (60,   60,  60)),
         ("STOP",  False, (60,   60,  60)),
     ],
     "running": [
-        ("RUN",   False, (40,   80,  40)),
+        ("RUN v", False, (40,   80,  40)),
         ("PAUSE", True,  (140, 120,  40)),
         ("STOP",  True,  (140,  50,  50)),
     ],
     "paused":  [
-        ("RUN",   True,  (60,  140,  60)),
+        ("RUN v", True,  (60,  140,  60)),
         ("PAUSE", True,  (160, 140,  50)),
         ("STOP",  True,  (140,  50,  50)),
     ],
