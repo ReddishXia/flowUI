@@ -8,6 +8,7 @@ run a forward pass through the trained model, show top-k predictions.
 from __future__ import annotations
 import pathlib
 import dearpygui.dearpygui as dpg
+import ml_forge.state as state
 from ml_forge.ui.console import log
 
 
@@ -38,7 +39,139 @@ def _pil_to_texture(pil_img) -> None:
 _state: dict = {
     "ckpt_path":   "",
     "last_sample": None,
+    "source":      "manual",
 }
+
+
+_CHECKPOINT_NODE_LABELS = ("pth", "pt", "ckpt")
+
+
+def _iter_checkpoint_nodes() -> list[dict]:
+    """Return checkpoint node metadata, preferring the active tab first."""
+    from ml_forge.graph.nodes import input_field_tag
+
+    ordered_tabs = []
+    if state.active_tab_id in state.tabs:
+        ordered_tabs.append((state.active_tab_id, state.tabs[state.active_tab_id]))
+    ordered_tabs.extend(
+        (tid, tab) for tid, tab in state.tabs.items()
+        if tid != state.active_tab_id
+    )
+
+    nodes: list[dict] = []
+    for tid, tab in ordered_tabs:
+        for ntag, node_info in tab["nodes"].items():
+            label = node_info["label"] if isinstance(node_info, dict) else str(node_info)
+            if label not in _CHECKPOINT_NODE_LABELS:
+                continue
+            nid = int(ntag.split("_")[2])
+            ftag = input_field_tag(tid, nid, "path")
+            path = dpg.get_value(ftag).strip() if dpg.does_item_exist(ftag) else ""
+            nodes.append({
+                "tid": tid,
+                "tab": tab,
+                "ntag": ntag,
+                "label": label,
+                "path": path,
+                "field_tag": ftag,
+            })
+    return nodes
+
+
+def _pick_checkpoint_node(prefer_filled: bool = True) -> dict | None:
+    nodes = _iter_checkpoint_nodes()
+    if not nodes:
+        return None
+    if prefer_filled:
+        for node in nodes:
+            if node["path"]:
+                return node
+    return nodes[0]
+
+
+def _update_checkpoint_source_text(node: dict | None) -> None:
+    if not dpg.does_item_exist("inf_ckpt_source"):
+        return
+    if node and node.get("path"):
+        dpg.set_value(
+            "inf_ckpt_source",
+            f"Source: graph node {node['label']} ({node['tab']['name']})",
+        )
+    else:
+        dpg.set_value("inf_ckpt_source", "Source: manual input")
+
+
+def _sync_checkpoint_from_graph() -> dict | None:
+    """If a checkpoint node exists, use its path as the inference default."""
+    node = _pick_checkpoint_node(prefer_filled=True)
+    if node and node.get("path"):
+        _state["ckpt_path"] = node["path"]
+        _state["source"] = f"graph:{node['label']}"
+        if dpg.does_item_exist("inf_ckpt_path"):
+            dpg.set_value("inf_ckpt_path", node["path"])
+    _update_checkpoint_source_text(node)
+    return node
+
+
+def _write_checkpoint_to_graph(path: str) -> None:
+    """Mirror the selected/manual path back into the first checkpoint node."""
+    node = _pick_checkpoint_node(prefer_filled=True) or _pick_checkpoint_node(prefer_filled=False)
+    if not node:
+        _state["source"] = "manual"
+        _update_checkpoint_source_text(None)
+        return
+    if dpg.does_item_exist(node["field_tag"]):
+        dpg.set_value(node["field_tag"], path)
+    _state["source"] = f"graph:{node['label']}"
+    _update_checkpoint_source_text({**node, "path": path})
+
+
+def _resolve_checkpoint_path() -> str:
+    """
+    Resolve the checkpoint path from the window first, then from graph nodes.
+    Manual input is mirrored back to the first available checkpoint node.
+    """
+    if dpg.does_item_exist("inf_ckpt_path"):
+        path = dpg.get_value("inf_ckpt_path").strip()
+        if path:
+            _state["ckpt_path"] = path
+            _write_checkpoint_to_graph(path)
+            return path
+
+    node = _sync_checkpoint_from_graph()
+    return node["path"] if node and node.get("path") else ""
+
+
+def _normalise_state_dict_keys(state_dict: dict) -> dict:
+    """Strip common wrapper prefixes so exported and framework checkpoints both load."""
+    cleaned = {}
+    for key, value in state_dict.items():
+        nk = key
+        if nk.startswith("state_dict."):
+            nk = nk[len("state_dict."):]
+        if nk.startswith("model."):
+            nk = nk[len("model."):]
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        cleaned[nk] = value
+    return cleaned
+
+
+def _extract_state_dict(payload):
+    """
+    Accept raw state_dict payloads and common checkpoint wrappers.
+    Supports .pth/.pt as raw state dicts and .ckpt files storing nested weights.
+    """
+    if isinstance(payload, dict):
+        if payload and all(hasattr(v, "shape") for v in payload.values()):
+            return _normalise_state_dict_keys(payload)
+
+        for key in ("state_dict", "model_state_dict", "model"):
+            candidate = payload.get(key)
+            if isinstance(candidate, dict):
+                return _normalise_state_dict_keys(candidate)
+
+    raise ValueError("Checkpoint does not contain a supported state_dict payload.")
 
 
 # Window
@@ -49,6 +182,7 @@ def open_inference_window() -> None:
         dpg.delete_item(tag)
 
     _ensure_texture()
+    graph_node = _sync_checkpoint_from_graph()
 
     vw = dpg.get_viewport_client_width()
     vh = dpg.get_viewport_client_height()
@@ -63,12 +197,19 @@ def open_inference_window() -> None:
                      color=(160, 160, 160))
         dpg.add_spacer(height=8)
 
-        dpg.add_text("Checkpoint (.pth)", color=(200, 200, 200))
+        dpg.add_text("Checkpoint (.pth / .pt / .ckpt)", color=(200, 200, 200))
         with dpg.group(horizontal=True):
             dpg.add_input_text(tag="inf_ckpt_path", width=350,
-                               hint="path/to/checkpoint.pth",
+                               hint="path/to/checkpoint.(pth|pt|ckpt)",
                                default_value=_state["ckpt_path"])
             dpg.add_button(label="Browse", callback=_browse_checkpoint)
+        dpg.add_text(
+            f"Source: graph node {graph_node['label']} ({graph_node['tab']['name']})"
+            if graph_node and graph_node.get("path") else
+            "Source: manual input",
+            tag="inf_ckpt_source",
+            color=(120, 160, 200),
+        )
 
         dpg.add_spacer(height=8)
 
@@ -127,6 +268,7 @@ def _browse_checkpoint() -> None:
         if path and dpg.does_item_exist("inf_ckpt_path"):
             dpg.set_value("inf_ckpt_path", path)
             _state["ckpt_path"] = path
+            _write_checkpoint_to_graph(path)
 
     tag = "inf_ckpt_dialog"
     if dpg.does_item_exist(tag):
@@ -135,6 +277,7 @@ def _browse_checkpoint() -> None:
                          width=600, height=400, callback=_cb, modal=True):
         dpg.add_file_extension(".pth")
         dpg.add_file_extension(".pt")
+        dpg.add_file_extension(".ckpt")
 
 
 # Dataset sampling
@@ -307,11 +450,11 @@ def _run_on_current_sample() -> None:
         if _state["last_sample"] is None:
             return
 
-    ckpt_path = dpg.get_value("inf_ckpt_path").strip() if dpg.does_item_exist("inf_ckpt_path") else ""
+    ckpt_path = _resolve_checkpoint_path()
     topk      = dpg.get_value("inf_topk")               if dpg.does_item_exist("inf_topk")      else 5
 
     if not ckpt_path:
-        _set_status("Select a checkpoint first.", error=True)
+        _set_status("Select a checkpoint first, or fill a pth/pt/ckpt node.", error=True)
         return
     if not pathlib.Path(ckpt_path).exists():
         _set_status("Checkpoint file not found.", error=True)
@@ -334,7 +477,7 @@ def _run_on_current_sample() -> None:
         model  = _build_torch_model(device)
         model.eval()
 
-        sd = torch.load(ckpt_path, map_location=device)
+        sd = _extract_state_dict(torch.load(ckpt_path, map_location=device))
         model.load_state_dict(sd)
 
         inp = tensor.unsqueeze(0).to(device)

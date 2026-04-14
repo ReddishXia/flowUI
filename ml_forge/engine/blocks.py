@@ -435,7 +435,7 @@ SECTIONS: dict = {
             {
                 "label": "pth", "color": (120, 210, 255),
                 "params": ["path"],
-                "inputs": [], "outputs": [],
+                "inputs": ["in"], "outputs": ["out"],
                 "defaults": {"path": ""},
                 "tooltip": "Checkpoint loader node for .pth model weights.",
                 "when_to_use": "Use when your inference flow should point to a PyTorch .pth checkpoint file.",
@@ -443,7 +443,7 @@ SECTIONS: dict = {
             {
                 "label": "pt", "color": (120, 210, 255),
                 "params": ["path"],
-                "inputs": [], "outputs": [],
+                "inputs": ["in"], "outputs": ["out"],
                 "defaults": {"path": ""},
                 "tooltip": "Checkpoint loader node for .pt model weights.",
                 "when_to_use": "Use when your inference flow should point to a PyTorch .pt checkpoint file.",
@@ -451,7 +451,7 @@ SECTIONS: dict = {
             {
                 "label": "ckpt", "color": (120, 210, 255),
                 "params": ["path"],
-                "inputs": [], "outputs": [],
+                "inputs": ["in"], "outputs": ["out"],
                 "defaults": {"path": ""},
                 "tooltip": "Checkpoint loader node for generic .ckpt checkpoint files.",
                 "when_to_use": "Use when your inference flow should point to a .ckpt checkpoint file.",

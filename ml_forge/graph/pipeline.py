@@ -11,9 +11,11 @@ ROLES = {
     "data_prep": {"label": "Data Prep", "color": (160, 100, 255), "dim": (80, 50, 130),  "description": "Datasets, loaders, augmentation"},
     "model":     {"label": "Model",     "color": (100, 180, 255), "dim": (50, 90, 130),  "description": "Layers, activations, normalization"},
     "training":  {"label": "Training",  "color": (100, 220, 180), "dim": (50, 110, 90),  "description": "Loss, optimizer, scheduler, metrics"},
+    "inference": {"label": "Inference", "color": (120, 210, 255), "dim": (50, 100, 130), "description": "Checkpoint selection and inference flow"},
 }
 
 ROLE_ORDER = ["data_prep", "model", "training"]
+ASSIGNABLE_ROLE_ORDER = ["data_prep", "model", "training", "inference"]
 
 
 def _tab_complete(t: dict) -> bool:
